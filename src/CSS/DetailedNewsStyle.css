@@ -1,0 +1,43 @@
+.complete-news{
+    padding-top:1rem;
+    width:100%;
+}
+
+.detailedNews{
+    display: flex;
+    flex-direction: column;
+    width: 80%;
+    padding-left: 20%;
+    padding-right:20%;
+}
+
+#news-image{
+    display: block;
+    width:100%;
+}
+.media{
+    width:100%;
+}
+.share-btn-whatsapp{
+    padding:0;
+    margin: 0;
+    width:100%;
+    height:100%;
+}
+.btn-whatsapp{
+    width:100%;
+    height:100%;
+}
+
+@media screen and (max-width: 768px) {
+    .detailedNews{
+        padding-left:1rem;
+        padding-right:1rem;
+    }
+    #news-image{
+        height:35vh;
+    }
+    .media{
+        height:100%;
+    }
+  }

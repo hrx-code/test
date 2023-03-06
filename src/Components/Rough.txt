@@ -1,0 +1,72 @@
+// // Import the functions you need from the SDKs you need
+// import { initializeApp } from "firebase/app";
+// import { getAnalytics } from "firebase/analytics";
+// import {getStorage,ref} from "firebase/storage"
+// import { getDatabase, query } from "firebase/database";
+// import { collection, getDocs, getFirestore  } from "firebase/firestore";
+
+// // TODO: Add SDKs for Firebase products that you want to use
+// // https://firebase.google.com/docs/web/setup#available-libraries
+
+// // Your web app's Firebase configuration
+// // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+// const firebaseConfig = {
+//   apiKey: "AIzaSyD1t4YBNVU_MzsdxIaFHBE6jwzEnnG8Z_c",
+//   authDomain: "fir-tut-48241.firebaseapp.com",
+//   projectId: "fir-tut-48241",
+//   storageBucket: "fir-tut-48241.appspot.com",
+//   messagingSenderId: "450989663629",
+//   appId: "1:450989663629:web:ff0b9cbb06ad2942ee49c4",
+//   measurementId: "G-VXDD7JSFET"
+// };
+
+// // Initialize Firebase
+// const app = initializeApp(firebaseConfig);
+// const analytics = getAnalytics(app);
+// const db = getFirestore(app);
+// const colRef = collection(db, "blogs");
+// console.log(colRef);
+// // const querySnapshot = await getDocs(collection(colRef, "blogs"));
+// // console.log(querySnapshot)
+// export {colRef, collection,db,getDocs};
+
+
+
+// ====================Homepage.JS======================
+/*
+import React from 'react'
+import {useState,useEffect} from 'react'
+// import {collection,getDocs} from  "firebase/firestore"
+import {colRef, collection,db,getDocs} from '../firebase.config'
+
+const Homepage = () => {
+    const [Blogs, setBlogs] = useState('')
+
+    const fetchBlogs=async()=>{
+      // const querySnapshot = await getDocs(collection(colRef, "blogs"));
+      // querySnapshot.forEach((doc) => {
+      //   // doc.data() is never undefined for query doc snapshots
+      //   console.log(doc);
+      // });
+
+        const citiesCol = collection(db, 'blogs');
+        const citySnapshot = await getDocs(citiesCol);
+        const cityList = citySnapshot.docs.map(doc => doc.data());
+        console.log(cityList);
+      
+
+    }
+    useEffect(() => {
+        setBlogs([])
+        fetchBlogs();
+    }, [])
+  return (
+    <div>
+        This is homepage, where retrieved data ll be shown. Thanks,
+    </div>
+  )
+}
+
+export default Homepage
+*/
+// ==============================================
