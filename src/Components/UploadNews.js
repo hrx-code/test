@@ -15,6 +15,7 @@ const UploadNews = () => {
   const [id, setId] = useState("")
   const [file, setFile] = useState("");
   const [views, setViews] = useState(0)
+  const [newsNumber, setNewsNumber] = useState(0)
     // progress
     const [percent, setPercent] = useState(0);
   
@@ -63,7 +64,9 @@ const UploadNews = () => {
       posted_by:`${posted_by}`,
       id:`${id}`,
       clip:`${clip}`,
-      imageSrc:`${imageURL}`
+      imageSrc:`${imageURL}`,
+      news_num:`${newsNumber}`,
+      views:143,
     }
     const result =await setDoc(doc(db, "blogs",`${title}`), 
       data
@@ -125,14 +128,14 @@ const handleUpload = () => {
               <label >Body,Complete News</label>
             </div>
 
-          <div className="form-floating mb-3">
+          {/* <div className="form-floating mb-3">
             <input onChange={e=>{setExcerpts(e.target.value)}} type="text" className="form-control" id="floatingInput" placeholder="guthanisiwan.com"/>
             <label >Excerpts</label>
-          </div>
+          </div> */}
 
           <div className="form-floating mb-3">
-            <input type="text" className="form-control" id="floatingInput" placeholder="guthanisiwan.com"/>
-            <label >Clip</label>
+            <input onChange={e=>{setNewsNumber(e.target.value)}} type="text" className="form-control" id="floatingInput" placeholder="guthanisiwan.com"/>
+            <label >News Number</label>
           </div>
 
           <div className="form-floating mb-3">

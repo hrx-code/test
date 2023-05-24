@@ -1,5 +1,5 @@
 import React from 'react'
-import { useState,useEffect } from 'react'
+import { useState,useEffect,useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import {db1 as db} from '../firebase.config'
 import { useLocation } from 'react-router-dom'
@@ -7,6 +7,17 @@ import { collection, getDocs  } from "firebase/firestore";
 import { RWebShare } from "react-web-share";
 import {FacebookIcon,FacebookShareButton,WhatsappShareButton,WhatsappIcon} from 'react-share'
 import  '../CSS/DetailedNewsStyle.css'
+import Preview from './Preview'
+
+ function getUrFromService() {
+  // The real implementation would make a network call here.
+   new Promise(resolve => {
+    setTimeout(() => {
+      resolve('resolved');
+    }, 1000);
+  });
+  return "https://via.placeholder.com/150";
+}
 
 const NewsWithID = () => {
   
@@ -75,6 +86,25 @@ const NewsWithID = () => {
         console.log("Sorry! Your browser does not support Web Share API");
       }
     };
+    const shareButton = useRef<HTMLButtonElement>("false");
+  const [url, setUrl] = useState("none"); // Unfortunately, we have to have a dummy string here, or FacebookShareButton will blow up.
+
+  // Provide an onClick handler that asyncronously fetches the url and sets it in the state.
+  const onClick = async () => {
+    // Be sure to check for the "none" state, so we don't trigger an infinite loop.
+    if (url === "none") {
+      const newUrl = await getUrFromService();
+      setUrl(newUrl);
+    }
+  };
+
+    // Whenever "url" changes and we re-render, we manually fire the click event on the button, and then re-set the url.
+  useEffect(() => {
+    if (url !== "none") {
+      shareButton.current?.click();
+      setUrl("none");
+    }
+  }, [url, shareButton]);
 
   return (
     <div className='complete-news'>
@@ -102,33 +132,14 @@ const NewsWithID = () => {
                 <div className='share-btn-whatsapp'>
                   <WhatsappShareButton 
                     title={`${Title}\n`}
-                    url={`guthanisiwan.com/#/news/${userId}`}
+                    useref={shareButton}
+                    // Disable calling the dialog if we don't have a url yet.
+                    openShareDialogOnClick={url !== "none"}
+                    url={url}
+                    onClick={onClick}
                   >
                     <WhatsappIcon className='btn-whatsapp'></WhatsappIcon>
                   </WhatsappShareButton>
-                </div>
-
-                {/* <div>
-                  <button
-                      onClick={handleShareButton}
-                      className="share-button"
-                      type="button"
-                      title="Share this article"
-                    >
-                    Share
-                  </button>
-                </div> */}
-                <div>
-                    <RWebShare
-                          data={{
-                            text: "Like humans, flamingos make friends for life",
-                            url: "https://guthanisiwan.com",
-                            title: "Flamingos",
-                          }}
-                          onClick={() => console.log("shared successfully!")}
-                        >
-                    <button>RWebShare 🔗</button>
-                  </RWebShare>
                 </div>
 
               </div>

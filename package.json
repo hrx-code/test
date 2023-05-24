@@ -4,6 +4,7 @@
   "homepage": "https://hrx-code.github.io/test",
   "private": true,
   "dependencies": {
+    "@dhaiwat10/react-link-preview": "^1.15.0",
     "@testing-library/jest-dom": "^5.16.5",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",

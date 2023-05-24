@@ -8,6 +8,7 @@ import NewsWithID from './Components/NewsWithID';
 import UploadNews from './Components/UploadNews';
 // import UploadNews from './Components/UploadNews';
 import {HashRouter, BrowserRouter, Routes, Route } from "react-router-dom";
+import Preview from './Components/Preview';
 
 function App() {
   return (
