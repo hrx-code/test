@@ -128,10 +128,10 @@ const handleUpload = () => {
               <label >Body,Complete News</label>
             </div>
 
-          {/* <div className="form-floating mb-3">
+          <div className="form-floating mb-3">
             <input onChange={e=>{setExcerpts(e.target.value)}} type="text" className="form-control" id="floatingInput" placeholder="guthanisiwan.com"/>
             <label >Excerpts</label>
-          </div> */}
+          </div>
 
           <div className="form-floating mb-3">
             <input onChange={e=>{setNewsNumber(e.target.value)}} type="text" className="form-control" id="floatingInput" placeholder="guthanisiwan.com"/>
