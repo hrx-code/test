@@ -51,7 +51,7 @@ const UploadNews = () => {
       .split(/\s+/) // Split the input by whitespace
       .map((word) => word.replace(/[^\w\s]/gi, "")) // Remove special characters from each word
       .join("-"); // Join the modified words with hyphens
-  
+    // comment added unnecessary.
     setId(modifiedInput);
   };
  
