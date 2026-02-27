@@ -6,6 +6,7 @@ import RetrieveImg from './Components/RetrieveImg';
 import About from './Components/About';
 import NewsWithID from './Components/NewsWithID';
 import UploadNews from './Components/UploadNews';
+import Articles from './Components/Articles'
 // import UploadNews from './Components/UploadNews';
 import {HashRouter, BrowserRouter, Routes, Route } from "react-router-dom";
 import Preview from './Components/Preview';
@@ -14,7 +15,6 @@ function App() {
   return (
     <div className="App">
       <HashRouter>      
-        <p>This is / page. I mean root page</p>
         <Routes>
           <Route path="/">This is / page. I mean root page but in another component</Route>
           <Route path="/home" element={<Homepage></Homepage>}></Route>
@@ -23,6 +23,7 @@ function App() {
           <Route path="/uploadNews" element={<UploadNews></UploadNews>}></Route>
           <Route path="/imageupload" element={<ImgUploader></ImgUploader>}></Route>
           <Route path="/imagedownload" element={<RetrieveImg></RetrieveImg>}></Route>
+          <Route path="/articles" element={<Articles></Articles>}></Route>
         </Routes>
       </HashRouter>
     </div>

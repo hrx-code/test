@@ -89,6 +89,14 @@ const NewsWithID = () => {
     const shareButton = useRef<HTMLButtonElement>("false");
   const [url, setUrl] = useState("none"); // Unfortunately, we have to have a dummy string here, or FacebookShareButton will blow up.
 
+  const isImageUrl = (text) => {
+    const value = (text || "").trim();
+    if (!/^https?:\/\//i.test(value)) {
+      return false;
+    }
+    return /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(value) || value.includes("firebasestorage.googleapis.com");
+  };
+
   // Provide an onClick handler that asyncronously fetches the url and sets it in the state.
   const onClick = async () => {
     // Be sure to check for the "none" state, so we don't trigger an infinite loop.
@@ -147,13 +155,24 @@ const NewsWithID = () => {
               <div id="body">
                 {
                   
-                    Body!="" &&
-                     Body.split('#').map(text=>{
+                    Body!=="" &&
+                     Body.split('#').map((text, index)=>{
+                      const trimmedText = text.trim();
+                      if (trimmedText === "") {
+                        return null;
+                      }
+                      if (isImageUrl(trimmedText)) {
+                        return (
+                          <div key={`img-${index}`} className="mb-3">
+                            <img src={trimmedText} alt="news" className='img-fluid media'></img>
+                          </div>
+                        );
+                      }
                       return(
-                        <>
-                          <p className='text-break,text-left text-justify'>{text}</p>
+                        <React.Fragment key={`p-${index}`}>
+                          <p className='text-break,text-left text-justify'>{trimmedText}</p>
                           <br></br>
-                        </>
+                        </React.Fragment>
                       )
                      })
                 }
