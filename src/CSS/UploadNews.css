@@ -34,6 +34,8 @@
   font-family: "Manrope", "Nunito Sans", "Segoe UI", sans-serif;
   position: relative;
   overflow: hidden;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .upload-news-card::before {
@@ -145,6 +147,10 @@
   min-height: 160px !important;
 }
 
+.upload-news-card .btn {
+  min-height: 44px;
+}
+
 .inline-url-list {
   margin-top: 12px;
   padding: 10px;
@@ -235,5 +241,60 @@
 
   .upload-news-title {
     font-size: 1.4rem;
+  }
+
+  .upload-status {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .inline-url-card-top {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .inline-url-preview {
+    width: 100%;
+    max-width: 100%;
+    max-height: 220px;
+  }
+
+  .inline-copy-btn {
+    width: 100%;
+  }
+
+  .upload-hint code {
+    display: inline-block;
+    margin: 6px 0 0 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .upload-news-page {
+    padding: 12px 8px;
+  }
+
+  .upload-news-card {
+    padding: 12px;
+    border-radius: 10px;
+  }
+
+  .upload-news-section {
+    padding: 12px;
+    margin-bottom: 16px;
+  }
+
+  .upload-news-subtitle {
+    margin-bottom: 14px;
+    font-size: 0.92rem;
+  }
+
+  .upload-news-section-title {
+    font-size: 0.96rem;
+    margin-bottom: 10px;
+  }
+
+  .upload-textarea {
+    min-height: 130px !important;
   }
 }
