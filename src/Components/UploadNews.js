@@ -81,6 +81,10 @@ const UploadNews = () => {
       .replace(/^-|-$/g, "");
   };
 
+  const getFriendlyError = (fallbackMessage) => {
+    return fallbackMessage;
+  };
+
   const handleInputChange = (event) => {
     setId(formatNewsLink(event.target.value));
   };
@@ -191,7 +195,8 @@ const UploadNews = () => {
       },
       (error) => {
         setAuthLoading(false);
-        setAuthError(error?.message || "Authentication check failed.");
+        console.log(error);
+        setAuthError(getFriendlyError("Unable to verify account right now. Please try again."));
       }
     );
     return () => unsubscribe();
@@ -348,10 +353,14 @@ const UploadNews = () => {
       views: 80,
     };
 
-    await setDoc(doc(db, "blogs", `${title}`), data).then(() => {
+    try {
+      await setDoc(doc(db, "blogs", `${title}`), data);
       alert("News has been submitted successfully.");
       clearFormAfterSubmit();
-    });
+    } catch (error) {
+      console.log(error);
+      alert(getFriendlyError("Unable to publish news right now. Please try again."));
+    }
   };
 
   const handleUpload = async () => {
@@ -388,7 +397,10 @@ const UploadNews = () => {
         const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
         setPercent(progress);
       },
-      (err) => console.log(err),
+      (err) => {
+        console.log(err);
+        alert(getFriendlyError("Image upload failed. Please try again."));
+      },
       () => {
         getDownloadURL(uploadTask.snapshot.ref).then((url) => {
           setImageURL(url);
@@ -438,7 +450,7 @@ const UploadNews = () => {
       setInlineImageUrls(uploadedUrls);
     } catch (error) {
       console.log(error);
-      alert("Some images failed to upload. Please try again.");
+      alert(getFriendlyError("Some images failed to upload. Please try again."));
     } finally {
       setIsInlineUploading(false);
     }
@@ -473,7 +485,8 @@ const UploadNews = () => {
       setSessionInfo("Logged in");
       setLoginPassword("");
     } catch (error) {
-      setAuthError(error?.message || "Unable to sign in. Please try again.");
+      console.log(error);
+      setAuthError(getFriendlyError("Unable to sign in right now. Please check credentials and try again."));
     } finally {
       setIsSigningIn(false);
     }
