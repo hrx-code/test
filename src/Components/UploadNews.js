@@ -67,13 +67,16 @@ const UploadNews = () => {
     setInlineFiles(files);
   }
 
+  const formatNewsLink = (value) => {
+    return String(value || "")
+      .trim()
+      .replace(/[^A-Za-z0-9\u0900-\u097F]+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
+  };
+
   const handleInputChange = (event) => {
-    const input = event.target.value;
-    const modifiedInput = input
-      .split(/\s+/)
-      .map((word) => word.replace(/[^\w\s]/gi, ""))
-      .join("-");
-    setId(modifiedInput);
+    setId(formatNewsLink(event.target.value));
   };
 
   const updateLastActive = () => {
@@ -429,13 +432,7 @@ const UploadNews = () => {
     if (!normalizedOutput) {
       return;
     }
-    const slugValue = normalizedOutput
-      .toLowerCase()
-      .split(/\s+/)
-      .map((word) => word.replace(/[^\w\s]/gi, ""))
-      .filter(Boolean)
-      .join("-");
-    setId(slugValue);
+    setId(formatNewsLink(normalizedOutput));
     setShowTranslateDialog(false);
   };
 
