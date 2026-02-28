@@ -21,6 +21,9 @@ const UploadNews = () => {
   const DRAFT_STORAGE_KEY = "uploadNewsDraft";
   const SESSION_ACTIVITY_KEY = "uploadNewsLastActiveAt";
   const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
+  const COVER_TARGET_WIDTH = 1200;
+  const COVER_TARGET_HEIGHT = 630;
+  const COVER_JPEG_QUALITY = 0.82;
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [excerpts, setExcerpts] = useState("");
@@ -43,6 +46,8 @@ const UploadNews = () => {
   const [authError, setAuthError] = useState("");
   const [sessionInfo, setSessionInfo] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isCoverProcessing, setIsCoverProcessing] = useState(false);
+  const [coverProcessingInfo, setCoverProcessingInfo] = useState("");
   const [showTranslateDialog, setShowTranslateDialog] = useState(false);
   const [translationDirection, setTranslationDirection] = useState("hi-en");
   const [translationInput, setTranslationInput] = useState("");
@@ -60,6 +65,7 @@ const UploadNews = () => {
 
   function handleChange(event) {
     setFile(event.target.files[0]);
+    setCoverProcessingInfo("");
   }
 
   function handleInlineFilesChange(event) {
@@ -77,6 +83,79 @@ const UploadNews = () => {
 
   const handleInputChange = (event) => {
     setId(formatNewsLink(event.target.value));
+  };
+
+  const optimizeCoverImage = async (originalFile) => {
+    const imageDataUrl = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("Unable to read image file."));
+      reader.readAsDataURL(originalFile);
+    });
+
+    const loadedImage = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Unable to load image."));
+      image.src = imageDataUrl;
+    });
+
+    const canvas = document.createElement("canvas");
+    canvas.width = COVER_TARGET_WIDTH;
+    canvas.height = COVER_TARGET_HEIGHT;
+    const context = canvas.getContext("2d");
+    if (!context) {
+      return originalFile;
+    }
+
+    const sourceWidth = loadedImage.naturalWidth;
+    const sourceHeight = loadedImage.naturalHeight;
+    const sourceRatio = sourceWidth / sourceHeight;
+    const targetRatio = COVER_TARGET_WIDTH / COVER_TARGET_HEIGHT;
+    let cropWidth = sourceWidth;
+    let cropHeight = sourceHeight;
+    let cropX = 0;
+    let cropY = 0;
+
+    if (sourceRatio > targetRatio) {
+      cropWidth = Math.round(sourceHeight * targetRatio);
+      cropX = Math.round((sourceWidth - cropWidth) / 2);
+    } else if (sourceRatio < targetRatio) {
+      cropHeight = Math.round(sourceWidth / targetRatio);
+      cropY = Math.round((sourceHeight - cropHeight) / 2);
+    }
+
+    context.drawImage(
+      loadedImage,
+      cropX,
+      cropY,
+      cropWidth,
+      cropHeight,
+      0,
+      0,
+      COVER_TARGET_WIDTH,
+      COVER_TARGET_HEIGHT
+    );
+
+    const compressedBlob = await new Promise((resolve, reject) => {
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            reject(new Error("Unable to compress image."));
+            return;
+          }
+          resolve(blob);
+        },
+        "image/jpeg",
+        COVER_JPEG_QUALITY
+      );
+    });
+
+    const originalName = originalFile.name.replace(/\.[^/.]+$/, "");
+    return new File([compressedBlob], `${originalName}-cover.jpg`, {
+      type: "image/jpeg",
+      lastModified: Date.now(),
+    });
   };
 
   const updateLastActive = () => {
@@ -275,7 +354,7 @@ const UploadNews = () => {
     });
   };
 
-  const handleUpload = () => {
+  const handleUpload = async () => {
     if (!isAuthorized) {
       alert("Please sign in with admin account first.");
       return;
@@ -285,8 +364,24 @@ const UploadNews = () => {
       return;
     }
 
-    const storageRef = ref(storage, `/News/harsh/${file.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, file);
+    let fileToUpload = file;
+    try {
+      setIsCoverProcessing(true);
+      setCoverProcessingInfo("Optimizing cover image (1200x630)...");
+      fileToUpload = await optimizeCoverImage(file);
+      const sourceSizeKb = Math.max(1, Math.round(file.size / 1024));
+      const targetSizeKb = Math.max(1, Math.round(fileToUpload.size / 1024));
+      setCoverProcessingInfo(`Optimized ${sourceSizeKb}KB to ${targetSizeKb}KB`);
+    } catch (error) {
+      console.log(error);
+      setCoverProcessingInfo("Could not optimize image. Uploading original file.");
+      fileToUpload = file;
+    } finally {
+      setIsCoverProcessing(false);
+    }
+
+    const storageRef = ref(storage, `/News/harsh/${fileToUpload.name}`);
+    const uploadTask = uploadBytesResumable(storageRef, fileToUpload);
     uploadTask.on(
       "state_changed",
       (snapshot) => {
@@ -551,20 +646,26 @@ const UploadNews = () => {
           <label className="form-label" htmlFor="newsImageInput">
             Select the image
           </label>
-          <input
-            type="file"
-            className="form-control mb-2"
-            id="newsImageInput"
-            onChange={handleChange}
-            accept="/image/*"
-            ref={coverInputRef}
-          />
-          <button type="button" className="btn btn-outline-secondary w-100" onClick={handleUpload}>
-            Upload Image First
-          </button>
-          <div
-            className="progress upload-progress"
-            role="progressbar"
+            <input
+              type="file"
+              className="form-control mb-2"
+              id="newsImageInput"
+              onChange={handleChange}
+              accept="image/*"
+              ref={coverInputRef}
+            />
+            <button
+              type="button"
+              className="btn btn-outline-secondary w-100"
+              onClick={handleUpload}
+              disabled={isCoverProcessing}
+            >
+              Upload Image First
+            </button>
+            {coverProcessingInfo && <p className="upload-hint mt-2">{coverProcessingInfo}</p>}
+            <div
+              className="progress upload-progress"
+              role="progressbar"
             aria-label="Image upload progress"
             aria-valuenow={percent}
             aria-valuemin="0"
@@ -629,7 +730,7 @@ const UploadNews = () => {
                   className="form-control mb-2"
                   id="newsInlineImagesInput"
                   onChange={handleInlineFilesChange}
-                  accept="/image/*"
+                  accept="image/*"
                   multiple
                   ref={inlineInputRef}
                 />
