@@ -43,6 +43,13 @@ const UploadNews = () => {
   const [authError, setAuthError] = useState("");
   const [sessionInfo, setSessionInfo] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [showTranslateDialog, setShowTranslateDialog] = useState(false);
+  const [translationDirection, setTranslationDirection] = useState("hi-en");
+  const [translationInput, setTranslationInput] = useState("");
+  const [translationOutput, setTranslationOutput] = useState("");
+  const [translationTargetField, setTranslationTargetField] = useState("body");
+  const [translationError, setTranslationError] = useState("");
+  const [isTranslating, setIsTranslating] = useState(false);
   const isCoverUploaded = imageURL !== "";
   const coverInputRef = useRef(null);
   const inlineInputRef = useRef(null);
@@ -381,6 +388,59 @@ const UploadNews = () => {
     setSessionInfo("Logged out");
   };
 
+  const translateText = async () => {
+    const normalizedInput = translationInput.trim();
+    if (!normalizedInput) {
+      setTranslationError("Please enter text to translate.");
+      setTranslationOutput("");
+      return;
+    }
+
+    const sourceLanguage = translationDirection === "hi-en" ? "hi" : "en";
+    const targetLanguage = translationDirection === "hi-en" ? "en" : "hi";
+    setIsTranslating(true);
+    setTranslationError("");
+
+    try {
+      const endpoint = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sourceLanguage}&tl=${targetLanguage}&dt=t&q=${encodeURIComponent(
+        normalizedInput
+      )}`;
+      const response = await fetch(endpoint);
+      if (!response.ok) {
+        throw new Error("Translation request failed.");
+      }
+      const data = await response.json();
+      const translatedText = Array.isArray(data?.[0])
+        ? data[0].map((part) => part?.[0] || "").join("")
+        : "";
+      if (!translatedText) {
+        throw new Error("No translated text returned.");
+      }
+      setTranslationOutput(translatedText);
+    } catch (error) {
+      console.log(error);
+      setTranslationError("Unable to translate right now. Please try again.");
+    } finally {
+      setIsTranslating(false);
+    }
+  };
+
+  const applyTranslatedText = () => {
+    const normalizedOutput = translationOutput.trim();
+    if (!normalizedOutput) {
+      return;
+    }
+
+    if (translationTargetField === "title") {
+      setTitle(normalizedOutput);
+    } else if (translationTargetField === "excerpts") {
+      setExcerpts(normalizedOutput);
+    } else {
+      setBody(normalizedOutput);
+    }
+    setShowTranslateDialog(false);
+  };
+
   if (authLoading) {
     return (
       <div className="upload-news-page">
@@ -477,6 +537,18 @@ const UploadNews = () => {
           <span className={`upload-status ${inlineImageUrls.length > 0 ? "is-done" : "is-pending"}`}>
             Inline images: {inlineImageUrls.length} uploaded
           </span>
+        </div>
+        <div className="upload-tools-row">
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            onClick={() => {
+              setTranslationError("");
+              setShowTranslateDialog(true);
+            }}
+          >
+            Open Translator
+          </button>
         </div>
 
         <section className="upload-news-section">
@@ -661,6 +733,101 @@ const UploadNews = () => {
           </button>
         </form>
       </div>
+      {showTranslateDialog && (
+        <div
+          className="translate-dialog-backdrop"
+          role="presentation"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              setShowTranslateDialog(false);
+            }
+          }}
+        >
+          <div className="translate-dialog" role="dialog" aria-modal="true" aria-labelledby="translateDialogTitle">
+            <div className="translate-dialog-header">
+              <h3 id="translateDialogTitle" className="translate-dialog-title">
+                Translate Text
+              </h3>
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={() => setShowTranslateDialog(false)}
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="translate-direction-row">
+              <button
+                type="button"
+                className={`btn btn-sm ${
+                  translationDirection === "hi-en" ? "btn-primary" : "btn-outline-secondary"
+                }`}
+                onClick={() => setTranslationDirection("hi-en")}
+              >
+                Hindi to English
+              </button>
+              <button
+                type="button"
+                className={`btn btn-sm ${
+                  translationDirection === "en-hi" ? "btn-primary" : "btn-outline-secondary"
+                }`}
+                onClick={() => setTranslationDirection("en-hi")}
+              >
+                English to Hindi
+              </button>
+            </div>
+
+            <label className="form-label mt-2" htmlFor="translationInput">
+              Enter text
+            </label>
+            <textarea
+              id="translationInput"
+              className="form-control translate-input"
+              value={translationInput}
+              onChange={(event) => setTranslationInput(event.target.value)}
+              placeholder="Type text to translate"
+            ></textarea>
+
+            <div className="translate-actions-row">
+              <button type="button" className="btn btn-primary" onClick={translateText} disabled={isTranslating}>
+                {isTranslating ? "Translating..." : "Translate"}
+              </button>
+              <select
+                className="form-select"
+                value={translationTargetField}
+                onChange={(event) => setTranslationTargetField(event.target.value)}
+              >
+                <option value="title">Apply to Title</option>
+                <option value="body">Apply to Body</option>
+                <option value="excerpts">Apply to Excerpts</option>
+              </select>
+            </div>
+
+            {translationError && <p className="translate-error">{translationError}</p>}
+
+            <label className="form-label mt-2" htmlFor="translationOutput">
+              Translated text
+            </label>
+            <textarea
+              id="translationOutput"
+              className="form-control translate-output"
+              value={translationOutput}
+              readOnly
+              placeholder="Translation will appear here"
+            ></textarea>
+
+            <button
+              type="button"
+              className="btn btn-outline-secondary w-100 mt-2"
+              onClick={applyTranslatedText}
+              disabled={!translationOutput.trim()}
+            >
+              Apply In Form
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
