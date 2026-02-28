@@ -47,7 +47,6 @@ const UploadNews = () => {
   const [translationDirection, setTranslationDirection] = useState("hi-en");
   const [translationInput, setTranslationInput] = useState("");
   const [translationOutput, setTranslationOutput] = useState("");
-  const [translationTargetField, setTranslationTargetField] = useState("body");
   const [translationError, setTranslationError] = useState("");
   const [isTranslating, setIsTranslating] = useState(false);
   const isCoverUploaded = imageURL !== "";
@@ -430,14 +429,13 @@ const UploadNews = () => {
     if (!normalizedOutput) {
       return;
     }
-
-    if (translationTargetField === "title") {
-      setTitle(normalizedOutput);
-    } else if (translationTargetField === "excerpts") {
-      setExcerpts(normalizedOutput);
-    } else {
-      setBody(normalizedOutput);
-    }
+    const slugValue = normalizedOutput
+      .toLowerCase()
+      .split(/\s+/)
+      .map((word) => word.replace(/[^\w\s]/gi, ""))
+      .filter(Boolean)
+      .join("-");
+    setId(slugValue);
     setShowTranslateDialog(false);
   };
 
@@ -793,15 +791,6 @@ const UploadNews = () => {
               <button type="button" className="btn btn-primary" onClick={translateText} disabled={isTranslating}>
                 {isTranslating ? "Translating..." : "Translate"}
               </button>
-              <select
-                className="form-select"
-                value={translationTargetField}
-                onChange={(event) => setTranslationTargetField(event.target.value)}
-              >
-                <option value="title">Apply to Title</option>
-                <option value="body">Apply to Body</option>
-                <option value="excerpts">Apply to Excerpts</option>
-              </select>
             </div>
 
             {translationError && <p className="translate-error">{translationError}</p>}
@@ -823,7 +812,7 @@ const UploadNews = () => {
               onClick={applyTranslatedText}
               disabled={!translationOutput.trim()}
             >
-              Apply In Form
+              Apply To News Link
             </button>
           </div>
         </div>
