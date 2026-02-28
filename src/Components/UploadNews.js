@@ -4,6 +4,7 @@ import {
   doc,
   dbForUploadNews as db,
   storage,
+  auth,
   serverTimestamp,
   collection,
   getDocs,
@@ -13,9 +14,13 @@ import {
 } from "../firebase.config";
 import "../CSS/UploadNews.css";
 import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 
 const UploadNews = () => {
+  const ADMIN_EMAIL = process.env.REACT_APP_ADMIN_EMAIL || "";
   const DRAFT_STORAGE_KEY = "uploadNewsDraft";
+  const SESSION_ACTIVITY_KEY = "uploadNewsLastActiveAt";
+  const SESSION_TIMEOUT_MS = 10 * 60 * 1000;
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [excerpts, setExcerpts] = useState("");
@@ -31,9 +36,17 @@ const UploadNews = () => {
   const [showInlineUploader, setShowInlineUploader] = useState(false);
   const [isInlineUploading, setIsInlineUploading] = useState(false);
   const [selectedValue, setSelectedValue] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [authUser, setAuthUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authError, setAuthError] = useState("");
+  const [sessionInfo, setSessionInfo] = useState("");
+  const [isSigningIn, setIsSigningIn] = useState(false);
   const isCoverUploaded = imageURL !== "";
   const coverInputRef = useRef(null);
   const inlineInputRef = useRef(null);
+  const isAuthorized = Boolean(authUser) && (!ADMIN_EMAIL || authUser?.email === ADMIN_EMAIL);
 
   const handleSelectChange = (event) => {
     setSelectedValue(event.target.value);
@@ -57,6 +70,82 @@ const UploadNews = () => {
     setId(modifiedInput);
   };
 
+  const updateLastActive = () => {
+    sessionStorage.setItem(SESSION_ACTIVITY_KEY, String(Date.now()));
+  };
+
+  const readLastActive = () => {
+    const value = Number(sessionStorage.getItem(SESSION_ACTIVITY_KEY) || 0);
+    return Number.isFinite(value) ? value : 0;
+  };
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        if (!user) {
+          setAuthUser(null);
+          setAuthLoading(false);
+          sessionStorage.removeItem(SESSION_ACTIVITY_KEY);
+          return;
+        }
+        const lastActive = readLastActive();
+        if (lastActive && Date.now() - lastActive > SESSION_TIMEOUT_MS) {
+          setSessionInfo("Session expired after 10 minutes. Please sign in again.");
+          signOut(auth);
+          return;
+        }
+        updateLastActive();
+        setAuthUser(user);
+        setAuthLoading(false);
+        setAuthError("");
+        setSessionInfo("Logged in");
+      },
+      (error) => {
+        setAuthLoading(false);
+        setAuthError(error?.message || "Authentication check failed.");
+      }
+    );
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+
+    const markActivity = () => {
+      updateLastActive();
+    };
+    const events = ["click", "keydown", "mousemove", "scroll", "touchstart"];
+    events.forEach((eventName) => window.addEventListener(eventName, markActivity, { passive: true }));
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        markActivity();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    const sessionInterval = setInterval(() => {
+      const lastActive = readLastActive();
+      if (!lastActive) {
+        return;
+      }
+      if (Date.now() - lastActive > SESSION_TIMEOUT_MS) {
+        setSessionInfo("Session expired after 10 minutes of inactivity.");
+        setAuthError("Please sign in again to continue.");
+        signOut(auth);
+      }
+    }, 30000);
+
+    return () => {
+      clearInterval(sessionInterval);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      events.forEach((eventName) => window.removeEventListener(eventName, markActivity));
+    };
+  }, [authUser]);
+
   useEffect(() => {
     async function fetchData() {
       const newsLimit = 1;
@@ -71,8 +160,11 @@ const UploadNews = () => {
         setNewsNumber(news_number);
       });
     }
+    if (!isAuthorized) {
+      return;
+    }
     fetchData();
-  }, []);
+  }, [isAuthorized]);
 
   useEffect(() => {
     try {
@@ -134,6 +226,10 @@ const UploadNews = () => {
 
   const PushNewsToFirebase = async (e) => {
     e.preventDefault();
+    if (!isAuthorized) {
+      alert("Please sign in with admin account first.");
+      return;
+    }
     if (`${title}` === "") {
       alert("please fill title before submit");
       return;
@@ -171,6 +267,10 @@ const UploadNews = () => {
   };
 
   const handleUpload = () => {
+    if (!isAuthorized) {
+      alert("Please sign in with admin account first.");
+      return;
+    }
     if (!file) {
       alert("Please select an image first!");
       return;
@@ -194,6 +294,10 @@ const UploadNews = () => {
   };
 
   const uploadInlineImages = async () => {
+    if (!isAuthorized) {
+      alert("Please sign in with admin account first.");
+      return;
+    }
     if (isInlineUploading) {
       return;
     }
@@ -247,11 +351,125 @@ const UploadNews = () => {
     }
   };
 
+  const handleAdminLogin = async (event) => {
+    event.preventDefault();
+    setAuthError("");
+    if (!loginEmail || !loginPassword) {
+      setAuthError("Please enter admin email and password.");
+      return;
+    }
+    setIsSigningIn(true);
+    try {
+      const cred = await signInWithEmailAndPassword(auth, loginEmail.trim(), loginPassword);
+      if (ADMIN_EMAIL && cred.user.email !== ADMIN_EMAIL) {
+        setAuthError("This account is not authorized for publishing.");
+        await signOut(auth);
+      }
+      updateLastActive();
+      setSessionInfo("Logged in");
+      setLoginPassword("");
+    } catch (error) {
+      setAuthError(error?.message || "Unable to sign in. Please try again.");
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
+
+  const handleAdminLogout = async () => {
+    await signOut(auth);
+    setLoginPassword("");
+    setSessionInfo("Logged out");
+  };
+
+  if (authLoading) {
+    return (
+      <div className="upload-news-page">
+        <div className="upload-news-card">
+          <h2 className="upload-news-title">Checking Admin Session...</h2>
+          <p className="upload-news-subtitle">Please wait.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!authUser) {
+    return (
+      <div className="upload-news-page">
+        <div className="upload-news-card">
+          <h2 className="upload-news-title">Admin Login Required</h2>
+          <p className="upload-news-subtitle">Sign in to access the news uploader.</p>
+          <form className="form" onSubmit={handleAdminLogin}>
+            <section className="upload-news-section">
+              <div className="form-floating mb-3">
+                <input
+                  type="email"
+                  className="form-control"
+                  id="adminEmailInput"
+                  placeholder="admin@email.com"
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                />
+                <label htmlFor="adminEmailInput">Admin Email</label>
+              </div>
+              <div className="form-floating mb-3">
+                <input
+                  type="password"
+                  className="form-control"
+                  id="adminPasswordInput"
+                  placeholder="Password"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                />
+                <label htmlFor="adminPasswordInput">Password</label>
+              </div>
+              {authError && <p className="auth-error">{authError}</p>}
+              {sessionInfo && <p className="auth-note">{sessionInfo}</p>}
+              <button type="submit" className="btn btn-primary btn-lg w-100" disabled={isSigningIn}>
+                {isSigningIn ? "Signing in..." : "Sign In"}
+              </button>
+            </section>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthorized) {
+    return (
+      <div className="upload-news-page">
+        <div className="upload-news-card">
+          <h2 className="upload-news-title">Access Denied</h2>
+          <p className="upload-news-subtitle">
+            Signed in as <strong>{authUser.email}</strong>, but this account is not allowed to publish.
+          </p>
+          {ADMIN_EMAIL && (
+            <p className="auth-note">
+              Allowed admin account: <strong>{ADMIN_EMAIL}</strong>
+            </p>
+          )}
+          {sessionInfo && <p className="auth-note">{sessionInfo}</p>}
+          <button type="button" className="btn btn-outline-secondary w-100" onClick={handleAdminLogout}>
+            Sign Out
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="upload-news-page">
       <div className="upload-news-card">
         <h2 className="upload-news-title">Upload News</h2>
         <p className="upload-news-subtitle">Fill the news details below.</p>
+        <div className="auth-bar">
+          <div className="auth-user-wrap">
+            <span className="auth-pill">Logged in</span>
+            <span className="auth-user">Signed in: {authUser.email}</span>
+          </div>
+          <button type="button" className="btn btn-sm btn-outline-secondary" onClick={handleAdminLogout}>
+            Sign Out
+          </button>
+        </div>
         <div className="upload-status-row">
           <span className={`upload-status ${isCoverUploaded ? "is-done" : "is-pending"}`}>
             Cover image: {isCoverUploaded ? "Uploaded" : "Pending"}
