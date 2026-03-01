@@ -67,9 +67,7 @@ const UploadNews = () => {
   const [coverProcessingInfo, setCoverProcessingInfo] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [customCategory, setCustomCategory] = useState("");
-  const [publishToBlogs, setPublishToBlogs] = useState(true);
-  const [publishToAnonymous, setPublishToAnonymous] = useState(false);
-  const [publishToArticles, setPublishToArticles] = useState(false);
+  const [selectedPublishCollection, setSelectedPublishCollection] = useState("blogs");
   const [confirmProtectedPublish, setConfirmProtectedPublish] = useState(false);
   const [showTranslateDialog, setShowTranslateDialog] = useState(false);
   const [translationDirection, setTranslationDirection] = useState("hi-en");
@@ -113,7 +111,7 @@ const UploadNews = () => {
   };
 
   const resolvedCategory = selectedCategory === "Other" ? customCategory.trim() : selectedCategory;
-  const hasProtectedTargets = publishToAnonymous || publishToArticles;
+  const hasProtectedTarget = selectedPublishCollection !== "blogs";
 
   const optimizeCoverImage = async (originalFile) => {
     const imageDataUrl = await new Promise((resolve, reject) => {
@@ -300,9 +298,7 @@ const UploadNews = () => {
       setSelectedValue(parsedDraft.selectedValue || "");
       setSelectedCategory(parsedDraft.selectedCategory || "");
       setCustomCategory(parsedDraft.customCategory || "");
-      setPublishToBlogs(parsedDraft.publishToBlogs !== false);
-      setPublishToAnonymous(Boolean(parsedDraft.publishToAnonymous));
-      setPublishToArticles(Boolean(parsedDraft.publishToArticles));
+      setSelectedPublishCollection(parsedDraft.selectedPublishCollection || "blogs");
       setConfirmProtectedPublish(Boolean(parsedDraft.confirmProtectedPublish));
       setInlineImageUrls(Array.isArray(parsedDraft.inlineImageUrls) ? parsedDraft.inlineImageUrls : []);
       setShowInlineUploader(Boolean(parsedDraft.showInlineUploader));
@@ -321,9 +317,7 @@ const UploadNews = () => {
       selectedValue,
       selectedCategory,
       customCategory,
-      publishToBlogs,
-      publishToAnonymous,
-      publishToArticles,
+      selectedPublishCollection,
       confirmProtectedPublish,
       inlineImageUrls,
       showInlineUploader,
@@ -338,9 +332,7 @@ const UploadNews = () => {
     selectedValue,
     selectedCategory,
     customCategory,
-    publishToBlogs,
-    publishToAnonymous,
-    publishToArticles,
+    selectedPublishCollection,
     confirmProtectedPublish,
     inlineImageUrls,
     showInlineUploader,
@@ -362,9 +354,7 @@ const UploadNews = () => {
     setSelectedValue("");
     setSelectedCategory("");
     setCustomCategory("");
-    setPublishToBlogs(true);
-    setPublishToAnonymous(false);
-    setPublishToArticles(false);
+    setSelectedPublishCollection("blogs");
     setConfirmProtectedPublish(false);
     setNewsNumber((prev) => prev + 1);
     sessionStorage.removeItem(DRAFT_STORAGE_KEY);
@@ -397,11 +387,8 @@ const UploadNews = () => {
     } else if (!resolvedCategory) {
       alert("Please select or enter a news category");
       return;
-    } else if (!publishToBlogs && !publishToAnonymous && !publishToArticles) {
-      alert("Please select at least one collection to publish.");
-      return;
-    } else if (hasProtectedTargets && !confirmProtectedPublish) {
-      alert("Please confirm before publishing to protected collections.");
+    } else if (hasProtectedTarget && !confirmProtectedPublish) {
+      alert("Please confirm before publishing to protected collection.");
       return;
     } else if (newsNumber === 1000) {
       alert("Please Refresh the page and submit again");
@@ -423,19 +410,7 @@ const UploadNews = () => {
     };
 
     try {
-      const targetCollections = COLLECTION_TARGETS.filter((target) => {
-        if (target.key === "blogs") {
-          return publishToBlogs;
-        }
-        if (target.key === "Anonymous") {
-          return publishToAnonymous;
-        }
-        if (target.key === "Articles") {
-          return publishToArticles;
-        }
-        return false;
-      }).map((target) => target.key);
-
+      const targetCollections = [selectedPublishCollection];
       await Promise.all(targetCollections.map((collectionName) => setDoc(doc(db, collectionName, `${title}`), data)));
       alert(`News has been submitted successfully to: ${targetCollections.join(", ")}`);
       clearFormAfterSubmit();
@@ -887,7 +862,7 @@ const UploadNews = () => {
                 placeholder="Excerpts"
                 value={excerpts}
               />
-              <label htmlFor="newsExcerptInput">Excerpts</label>
+              <label htmlFor="newsExcerptInput">Excerpts / कुछ अंशः</label>
             </div>
 
             <label className="form-label" htmlFor="authorSelect">
@@ -937,55 +912,29 @@ const UploadNews = () => {
               </div>
             )}
 
-            <label className="form-label">Publish To Collections</label>
-            <div className="upload-news-section mb-3">
-              <div className="form-check mb-2">
-                <input
-                  className="form-check-input"
-                  type="checkbox"
-                  id="publishBlogs"
-                  checked={publishToBlogs}
-                  onChange={(event) => setPublishToBlogs(event.target.checked)}
-                />
-                <label className="form-check-label" htmlFor="publishBlogs">
-                  Blogs (Default)
-                </label>
-              </div>
-              <div className="form-check mb-2">
-                <input
-                  className="form-check-input"
-                  type="checkbox"
-                  id="publishAnonymous"
-                  checked={publishToAnonymous}
-                  onChange={(event) => {
-                    setPublishToAnonymous(event.target.checked);
-                    if (!event.target.checked && !publishToArticles) {
+            <label className="form-label">Publish To Collection</label>
+            <div className="upload-news-section compact-block mb-3">
+              {COLLECTION_TARGETS.map((target) => (
+                <div className="form-check mb-2" key={target.key}>
+                  <input
+                    className="form-check-input"
+                    type="radio"
+                    name="publishCollection"
+                    id={`publish-${target.key}`}
+                    checked={selectedPublishCollection === target.key}
+                    onChange={() => {
+                      setSelectedPublishCollection(target.key);
                       setConfirmProtectedPublish(false);
-                    }
-                  }}
-                />
-                <label className="form-check-label" htmlFor="publishAnonymous">
-                  Anonymous (Protected)
-                </label>
-              </div>
-              <div className="form-check mb-2">
-                <input
-                  className="form-check-input"
-                  type="checkbox"
-                  id="publishArticles"
-                  checked={publishToArticles}
-                  onChange={(event) => {
-                    setPublishToArticles(event.target.checked);
-                    if (!event.target.checked && !publishToAnonymous) {
-                      setConfirmProtectedPublish(false);
-                    }
-                  }}
-                />
-                <label className="form-check-label" htmlFor="publishArticles">
-                  Articles (Protected)
-                </label>
-              </div>
-              {hasProtectedTargets && (
+                    }}
+                  />
+                  <label className="form-check-label" htmlFor={`publish-${target.key}`}>
+                    {target.label}
+                    {target.key !== "blogs" ? " (Protected)" : ""}
+                  </label>
+                </div>
+              ))}
+
+              {hasProtectedTarget && (
                 <div className="form-check mt-2">
                   <input
                     className="form-check-input"
@@ -995,7 +944,7 @@ const UploadNews = () => {
                     onChange={(event) => setConfirmProtectedPublish(event.target.checked)}
                   />
                   <label className="form-check-label" htmlFor="confirmProtectedPublish">
-                    I confirm publishing to protected collections (Anonymous / Articles).
+                    I confirm publishing to {selectedPublishCollection}.
                   </label>
                 </div>
               )}
