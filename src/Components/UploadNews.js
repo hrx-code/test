@@ -24,6 +24,18 @@ const UploadNews = () => {
   const COVER_TARGET_WIDTH = 1200;
   const COVER_TARGET_HEIGHT = 630;
   const COVER_JPEG_QUALITY = 0.82;
+  const CATEGORY_OPTIONS = [
+    "Crime",
+    "Development",
+    "Village / Guthani",
+    "Administration",
+    "Politics",
+    "Education",
+    "Health",
+    "Sports",
+    "Business",
+    "Other",
+  ];
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [excerpts, setExcerpts] = useState("");
@@ -48,6 +60,8 @@ const UploadNews = () => {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [isCoverProcessing, setIsCoverProcessing] = useState(false);
   const [coverProcessingInfo, setCoverProcessingInfo] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [customCategory, setCustomCategory] = useState("");
   const [showTranslateDialog, setShowTranslateDialog] = useState(false);
   const [translationDirection, setTranslationDirection] = useState("hi-en");
   const [translationInput, setTranslationInput] = useState("");
@@ -88,6 +102,8 @@ const UploadNews = () => {
   const handleInputChange = (event) => {
     setId(formatNewsLink(event.target.value));
   };
+
+  const resolvedCategory = selectedCategory === "Other" ? customCategory.trim() : selectedCategory;
 
   const optimizeCoverImage = async (originalFile) => {
     const imageDataUrl = await new Promise((resolve, reject) => {
@@ -272,6 +288,8 @@ const UploadNews = () => {
       setImageURL(parsedDraft.imageURL || "");
       setId(parsedDraft.id || "");
       setSelectedValue(parsedDraft.selectedValue || "");
+      setSelectedCategory(parsedDraft.selectedCategory || "");
+      setCustomCategory(parsedDraft.customCategory || "");
       setInlineImageUrls(Array.isArray(parsedDraft.inlineImageUrls) ? parsedDraft.inlineImageUrls : []);
       setShowInlineUploader(Boolean(parsedDraft.showInlineUploader));
     } catch (error) {
@@ -287,11 +305,24 @@ const UploadNews = () => {
       imageURL,
       id,
       selectedValue,
+      selectedCategory,
+      customCategory,
       inlineImageUrls,
       showInlineUploader,
     };
     sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
-  }, [title, body, excerpts, imageURL, id, selectedValue, inlineImageUrls, showInlineUploader]);
+  }, [
+    title,
+    body,
+    excerpts,
+    imageURL,
+    id,
+    selectedValue,
+    selectedCategory,
+    customCategory,
+    inlineImageUrls,
+    showInlineUploader,
+  ]);
 
   const clearFormAfterSubmit = () => {
     setTitle("");
@@ -307,6 +338,8 @@ const UploadNews = () => {
     setShowInlineUploader(false);
     setIsInlineUploading(false);
     setSelectedValue("");
+    setSelectedCategory("");
+    setCustomCategory("");
     setNewsNumber((prev) => prev + 1);
     sessionStorage.removeItem(DRAFT_STORAGE_KEY);
     if (coverInputRef.current) {
@@ -335,6 +368,9 @@ const UploadNews = () => {
     } else if (`${selectedValue}` === "Please Select The Author" || `${selectedValue}` === "") {
       alert("please select the Author");
       return;
+    } else if (!resolvedCategory) {
+      alert("Please select or enter a news category");
+      return;
     } else if (newsNumber === 1000) {
       alert("Please Refresh the page and submit again");
       return;
@@ -346,6 +382,7 @@ const UploadNews = () => {
       body: `${body}`,
       excerpts: `${excerpts}`,
       posted_by: `${selectedValue}`,
+      category: `${resolvedCategory}`,
       id: `${id}`,
       clip: `${clip}`,
       imageSrc: `${imageURL}`,
@@ -823,6 +860,37 @@ const UploadNews = () => {
               <option value="मुकेश प्रजापति">मुकेश प्रजापति</option>
               <option value="कृष्णा यादव">कृष्णा यादव</option>
             </select>
+
+            <label className="form-label" htmlFor="categorySelect">
+              Category
+            </label>
+            <select
+              id="categorySelect"
+              className="form-select mb-3"
+              aria-label="Select category"
+              value={selectedCategory}
+              onChange={(event) => setSelectedCategory(event.target.value)}
+            >
+              <option value="">Please Select Category</option>
+              {CATEGORY_OPTIONS.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+            {selectedCategory === "Other" && (
+              <div className="form-floating mb-3">
+                <input
+                  type="text"
+                  className="form-control"
+                  id="customCategoryInput"
+                  placeholder="Enter category"
+                  value={customCategory}
+                  onChange={(event) => setCustomCategory(event.target.value)}
+                />
+                <label htmlFor="customCategoryInput">Custom Category</label>
+              </div>
+            )}
 
             <div className="form-floating mb-3">
               <input
