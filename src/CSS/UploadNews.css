@@ -61,6 +61,17 @@
   color: var(--text-muted);
 }
 
+.upload-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.upload-header-text {
+  min-width: 0;
+}
+
 .auth-bar {
   display: flex;
   align-items: center;
@@ -141,12 +152,6 @@
 .upload-status.is-pending {
   background-color: var(--pending-bg);
   color: var(--pending-text);
-}
-
-.upload-tools-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 14px;
 }
 
 .upload-news-section {
@@ -386,6 +391,15 @@
     font-size: 1.4rem;
   }
 
+  .upload-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .upload-header-row .btn {
+    width: 100%;
+  }
+
   .auth-bar {
     flex-direction: column;
     align-items: stretch;
@@ -402,14 +416,6 @@
   .upload-status {
     width: 100%;
     justify-content: center;
-  }
-
-  .upload-tools-row {
-    justify-content: stretch;
-  }
-
-  .upload-tools-row .btn {
-    width: 100%;
   }
 
   .inline-url-card-top {

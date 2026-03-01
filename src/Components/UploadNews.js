@@ -679,8 +679,22 @@ const UploadNews = () => {
   return (
     <div className="upload-news-page">
       <div className="upload-news-card">
-        <h2 className="upload-news-title">Upload News</h2>
-        <p className="upload-news-subtitle">Fill the news details below.</p>
+        <div className="upload-header-row">
+          <div className="upload-header-text">
+            <h2 className="upload-news-title">Upload News</h2>
+            <p className="upload-news-subtitle">Fill the news details below.</p>
+          </div>
+          <button
+            type="button"
+            className="btn btn-outline-secondary"
+            onClick={() => {
+              setTranslationError("");
+              setShowTranslateDialog(true);
+            }}
+          >
+            Open Translator
+          </button>
+        </div>
         <div className="auth-bar">
           <div className="auth-user-wrap">
             <span className="auth-pill">Logged in</span>
@@ -697,18 +711,6 @@ const UploadNews = () => {
           <span className={`upload-status ${inlineImageUrls.length > 0 ? "is-done" : "is-pending"}`}>
             Inline images: {inlineImageUrls.length} uploaded
           </span>
-        </div>
-        <div className="upload-tools-row">
-          <button
-            type="button"
-            className="btn btn-outline-secondary"
-            onClick={() => {
-              setTranslationError("");
-              setShowTranslateDialog(true);
-            }}
-          >
-            Open Translator
-          </button>
         </div>
 
         <section className="upload-news-section">
