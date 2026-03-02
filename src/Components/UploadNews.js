@@ -24,6 +24,14 @@ const UploadNews = () => {
   const COVER_TARGET_WIDTH = 1200;
   const COVER_TARGET_HEIGHT = 630;
   const COVER_JPEG_QUALITY = 0.82;
+  const GEMINI_PREFERRED_MODELS = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.0-flash-lite",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
+  ];
+  const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY || "";
   const COLLECTION_TARGETS = [
     { key: "blogs", label: "Blogs (Default)" },
     { key: "Anonymous", label: "Anonymous" },
@@ -41,6 +49,20 @@ const UploadNews = () => {
     "Business",
     "Other",
   ];
+  const EMERGENCY_COLLECTION = "emergenyc contact";
+  const initialEmergencyForm = {
+    policeStationLocation: "",
+    policeMobileNumber: "",
+    hospitalLocation: "",
+    hospitalMobileNumber: "",
+    ambulanceLocation: "",
+    ambulanceMobileNumber: "108",
+    fireBrigadeLocation: "",
+    fireBrigadeMobileNumber: "101",
+    womenHelplineLocation: "",
+    womenHelplineMobileNumber: "1091",
+    notes: "",
+  };
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [excerpts, setExcerpts] = useState("");
@@ -55,6 +77,9 @@ const UploadNews = () => {
   const [inlineImageUrls, setInlineImageUrls] = useState([]);
   const [showInlineUploader, setShowInlineUploader] = useState(false);
   const [isInlineUploading, setIsInlineUploading] = useState(false);
+  const [activeUploaderTab, setActiveUploaderTab] = useState("news");
+  const [isEmergencySubmitting, setIsEmergencySubmitting] = useState(false);
+  const [emergencyForm, setEmergencyForm] = useState(initialEmergencyForm);
   const [selectedValue, setSelectedValue] = useState("");
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -75,6 +100,8 @@ const UploadNews = () => {
   const [translationOutput, setTranslationOutput] = useState("");
   const [translationError, setTranslationError] = useState("");
   const [isTranslating, setIsTranslating] = useState(false);
+  const [tagsInputText, setTagsInputText] = useState("[]");
+  const [isGeneratingTags, setIsGeneratingTags] = useState(false);
   const isCoverUploaded = imageURL !== "";
   const coverInputRef = useRef(null);
   const inlineInputRef = useRef(null);
@@ -100,6 +127,350 @@ const UploadNews = () => {
       .replace(/[^A-Za-z0-9\u0900-\u097F]+/g, "-")
       .replace(/-+/g, "-")
       .replace(/^-|-$/g, "");
+  };
+
+  const stripImageLinksFromBody = (value) => {
+    return String(value || "")
+      .replace(/#https?:\/\/\S+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:\?\S*)?#/gi, " ")
+      .replace(/!\[[^\]]*]\((https?:\/\/[^)\s]+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:\?\S*)?)\)/gi, " ")
+      .replace(/https?:\/\/\S+\.(?:png|jpe?g|gif|webp|bmp|svg)(?:\?\S*)?/gi, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
+
+  const getFallbackTags = (cleanBodyText) => {
+    const stopWords = new Set([
+      "the",
+      "and",
+      "for",
+      "with",
+      "this",
+      "that",
+      "from",
+      "have",
+      "has",
+      "had",
+      "are",
+      "was",
+      "were",
+      "will",
+      "would",
+      "about",
+      "into",
+      "after",
+      "before",
+      "under",
+      "over",
+      "near",
+      "very",
+      "also",
+      "not",
+      "you",
+      "your",
+      "our",
+      "their",
+      "his",
+      "her",
+      "its",
+      "a",
+      "an",
+      "in",
+      "on",
+      "of",
+      "to",
+      "is",
+      "it",
+      "as",
+      "at",
+      "be",
+      "or",
+      "by",
+      "if",
+      "we",
+      "he",
+      "she",
+      "they",
+      "i",
+      "किया",
+      "गया",
+      "करे",
+      "और",
+      "है",
+      "था",
+      "थी",
+      "थे",
+      "को",
+      "से",
+      "में",
+      "पर",
+      "का",
+      "की",
+      "के",
+      "यह",
+      "वह",
+      "लिए",
+    ]);
+
+    const tokens = String(cleanBodyText || "")
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s-]/gu, " ")
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length > 2 && !stopWords.has(token));
+
+    const frequency = new Map();
+    tokens.forEach((token) => {
+      frequency.set(token, (frequency.get(token) || 0) + 1);
+    });
+
+    return Array.from(frequency.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([token]) => token);
+  };
+
+  const parseGeminiTagsArray = (rawText) => {
+    const normalizedText = String(rawText || "").trim();
+    if (!normalizedText) {
+      return [];
+    }
+
+    try {
+      const direct = JSON.parse(normalizedText);
+      if (Array.isArray(direct)) {
+        return direct
+          .map((tag) => String(tag).trim())
+          .filter(Boolean)
+          .slice(0, 8);
+      }
+    } catch (error) {
+      // Fallback to bracket extraction below.
+    }
+
+    const firstBracket = normalizedText.indexOf("[");
+    const lastBracket = normalizedText.lastIndexOf("]");
+    if (firstBracket !== -1 && lastBracket !== -1 && lastBracket > firstBracket) {
+      const candidate = normalizedText.slice(firstBracket, lastBracket + 1);
+      try {
+        const parsed = JSON.parse(candidate);
+        if (Array.isArray(parsed)) {
+          return parsed
+            .map((tag) => String(tag).trim())
+            .filter(Boolean)
+            .slice(0, 8);
+        }
+      } catch (error) {
+        return [];
+      }
+    }
+    return [];
+  };
+
+  const parseManualTagsInput = (value) => {
+    const normalized = String(value || "").trim();
+    if (!normalized) {
+      return [];
+    }
+    try {
+      const parsed = JSON.parse(normalized);
+      if (Array.isArray(parsed)) {
+        return parsed
+          .map((tag) => String(tag).trim())
+          .filter(Boolean)
+          .slice(0, 8);
+      }
+    } catch (error) {
+      // Accept comma-separated fallback.
+    }
+    return normalized
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter(Boolean)
+      .slice(0, 8);
+  };
+
+  const hasHindiScript = (value) => /[\u0900-\u097F]/.test(String(value || ""));
+
+  const normalizeTags = (tags) => {
+    return Array.from(
+      new Set(
+        (Array.isArray(tags) ? tags : [])
+          .map((tag) => String(tag).trim())
+          .filter(Boolean)
+      )
+    ).slice(0, 8);
+  };
+
+  const getHindiOnlyTags = (tags) => {
+    return normalizeTags(tags).filter((tag) => hasHindiScript(tag));
+  };
+
+  const isMostlyHindiTags = (tags) => {
+    const normalized = normalizeTags(tags);
+    if (normalized.length === 0) {
+      return false;
+    }
+    const hindiCount = normalized.filter((tag) => hasHindiScript(tag)).length;
+    return hindiCount >= Math.ceil(normalized.length * 0.7);
+  };
+
+  const resolveGeminiModelCandidates = async () => {
+    if (!GEMINI_API_KEY) {
+      return GEMINI_PREFERRED_MODELS;
+    }
+
+    try {
+      const listEndpoint = `https://generativelanguage.googleapis.com/v1beta/models?key=${GEMINI_API_KEY}`;
+      const response = await fetch(listEndpoint);
+      if (!response.ok) {
+        return GEMINI_PREFERRED_MODELS;
+      }
+
+      const payload = await response.json();
+      const availableGenerateContentModels = (payload?.models || [])
+        .filter((model) => (model?.supportedGenerationMethods || []).includes("generateContent"))
+        .map((model) => String(model?.name || "").replace(/^models\//, ""))
+        .filter(Boolean);
+
+      if (availableGenerateContentModels.length === 0) {
+        return GEMINI_PREFERRED_MODELS;
+      }
+
+      const preferredAvailable = GEMINI_PREFERRED_MODELS.filter((modelName) =>
+        availableGenerateContentModels.includes(modelName)
+      );
+      const remainingAvailable = availableGenerateContentModels.filter(
+        (modelName) => !preferredAvailable.includes(modelName)
+      );
+      return [...preferredAvailable, ...remainingAvailable];
+    } catch (error) {
+      console.log(error);
+      return GEMINI_PREFERRED_MODELS;
+    }
+  };
+
+  const callGeminiWithModelFallback = async (promptText, temperature = 0.2) => {
+    const modelCandidates = await resolveGeminiModelCandidates();
+    let lastError = null;
+
+    for (const modelName of modelCandidates) {
+      try {
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [{ text: promptText }],
+              },
+            ],
+            generationConfig: {
+              responseMimeType: "application/json",
+              temperature,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          const errorPayload = await response.text();
+          throw new Error(`[${modelName}] ${response.status}: ${errorPayload}`);
+        }
+
+        const payload = await response.json();
+        const mergedText = (payload?.candidates || [])
+          .flatMap((candidate) => candidate?.content?.parts || [])
+          .map((part) => part?.text || "")
+          .join("\n");
+
+        if (!mergedText.trim()) {
+          throw new Error(`[${modelName}] Empty response from Gemini.`);
+        }
+        return mergedText;
+      } catch (error) {
+        lastError = error;
+        console.log(error);
+      }
+    }
+
+    throw lastError || new Error("All Gemini model calls failed.");
+  };
+
+  const getGeminiTags = async (cleanBodyText) => {
+    if (!cleanBodyText.trim()) {
+      return [];
+    }
+    if (!GEMINI_API_KEY) {
+      return [];
+    }
+
+    const prompt = [
+      "You are a keyword extractor for local news.",
+      "Extract 5 to 8 descriptive keywords from the given news body.",
+      "Keywords must be in Hindi, written in Devanagari script only.",
+      "Use short keyword phrases, not full sentences.",
+      "Return only a valid JSON array of strings.",
+      "No markdown, no explanation.",
+      `News body: ${cleanBodyText}`,
+    ].join("\n");
+    const mergedText = await callGeminiWithModelFallback(prompt, 0.2);
+    const parsedTags = parseGeminiTagsArray(mergedText);
+    const uniqueTags = normalizeTags(parsedTags);
+    if (uniqueTags.length === 0) {
+      throw new Error("Gemini returned empty or unparsable tags.");
+    }
+    return uniqueTags;
+  };
+
+  const convertTagsToHindi = async (tags) => {
+    const normalizedTags = normalizeTags(tags);
+    if (normalizedTags.length === 0 || !GEMINI_API_KEY) {
+      return normalizedTags;
+    }
+
+    const prompt = [
+      "Convert the following keyword array into Hindi Devanagari tags.",
+      "Keep meaning equivalent and concise.",
+      "Return only valid JSON array of strings.",
+      `Tags: ${JSON.stringify(normalizedTags)}`,
+    ].join("\n");
+    const mergedText = await callGeminiWithModelFallback(prompt, 0.1);
+    return normalizeTags(parseGeminiTagsArray(mergedText));
+  };
+
+  const handleGenerateTagsClick = async () => {
+    const bodyWithoutImageLinks = stripImageLinksFromBody(body);
+    if (!bodyWithoutImageLinks) {
+      alert("Please enter body content first.");
+      return;
+    }
+    setIsGeneratingTags(true);
+    try {
+      const generatedByGemini = await getGeminiTags(bodyWithoutImageLinks);
+      let finalTags = generatedByGemini;
+      if (!isMostlyHindiTags(finalTags)) {
+        try {
+          const converted = await convertTagsToHindi(finalTags);
+          if (converted.length > 0) {
+            finalTags = converted;
+          }
+        } catch (error) {
+          console.log(error);
+        }
+      }
+      setTagsInputText(JSON.stringify(finalTags));
+      console.log("Generated tags (Gemini Hindi preferred):", finalTags);
+    } catch (error) {
+      console.log(error);
+      const fallbackTags = getHindiOnlyTags(getFallbackTags(bodyWithoutImageLinks));
+      setTagsInputText(JSON.stringify(fallbackTags));
+      console.log("Generated tags (Fallback):", fallbackTags);
+      alert("Gemini tag generation failed. Fallback tags generated and logged in console.");
+    } finally {
+      setIsGeneratingTags(false);
+    }
   };
 
   const getFriendlyError = (fallbackMessage) => {
@@ -356,6 +727,7 @@ const UploadNews = () => {
     setCustomCategory("");
     setSelectedPublishCollection("blogs");
     setConfirmProtectedPublish(false);
+    setTagsInputText("[]");
     setNewsNumber((prev) => prev + 1);
     sessionStorage.removeItem(DRAFT_STORAGE_KEY);
     if (coverInputRef.current) {
@@ -395,6 +767,29 @@ const UploadNews = () => {
       return;
     }
 
+    const manualTags = parseManualTagsInput(tagsInputText);
+    let generatedTags = manualTags;
+    if (generatedTags.length === 0) {
+      const bodyWithoutImageLinks = stripImageLinksFromBody(body);
+      try {
+        generatedTags = await getGeminiTags(bodyWithoutImageLinks);
+        if (!isMostlyHindiTags(generatedTags)) {
+          try {
+            const converted = await convertTagsToHindi(generatedTags);
+            if (converted.length > 0) {
+              generatedTags = converted;
+            }
+          } catch (error) {
+            console.log(error);
+          }
+        }
+      } catch (error) {
+        console.log(error);
+        generatedTags = getFallbackTags(bodyWithoutImageLinks);
+      }
+    }
+    generatedTags = normalizeTags(generatedTags);
+
     const data = {
       Title: `${title}`,
       Time: serverTimestamp(),
@@ -407,6 +802,7 @@ const UploadNews = () => {
       imageSrc: `${imageURL}`,
       news_num: newsNumber,
       views: 80,
+      tags: generatedTags,
     };
 
     try {
@@ -521,6 +917,67 @@ const UploadNews = () => {
     } catch (error) {
       console.log(error);
       alert("Unable to copy. Please copy manually.");
+    }
+  };
+
+  const handleEmergencyFieldChange = (field, value) => {
+    setEmergencyForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+  };
+
+  const uploadEmergencyContacts = async (event) => {
+    event.preventDefault();
+    if (!isAuthorized) {
+      alert("Please sign in with admin account first.");
+      return;
+    }
+
+    if (
+      !emergencyForm.policeStationLocation.trim() ||
+      !emergencyForm.policeMobileNumber.trim() ||
+      !emergencyForm.hospitalLocation.trim() ||
+      !emergencyForm.hospitalMobileNumber.trim()
+    ) {
+      alert("Please fill police and hospital location + number.");
+      return;
+    }
+
+    setIsEmergencySubmitting(true);
+    try {
+      const emergencyDocRef = doc(collection(db, EMERGENCY_COLLECTION));
+      await setDoc(emergencyDocRef, {
+        policeStation: {
+          location: emergencyForm.policeStationLocation.trim(),
+          mobileNumber: emergencyForm.policeMobileNumber.trim(),
+        },
+        hospital: {
+          location: emergencyForm.hospitalLocation.trim(),
+          mobileNumber: emergencyForm.hospitalMobileNumber.trim(),
+        },
+        ambulance: {
+          location: emergencyForm.ambulanceLocation.trim(),
+          mobileNumber: emergencyForm.ambulanceMobileNumber.trim(),
+        },
+        fireBrigade: {
+          location: emergencyForm.fireBrigadeLocation.trim(),
+          mobileNumber: emergencyForm.fireBrigadeMobileNumber.trim(),
+        },
+        womenHelpline: {
+          location: emergencyForm.womenHelplineLocation.trim(),
+          mobileNumber: emergencyForm.womenHelplineMobileNumber.trim(),
+        },
+        notes: emergencyForm.notes.trim(),
+        createdAt: serverTimestamp(),
+      });
+      alert("Emergency contacts uploaded successfully.");
+      setEmergencyForm(initialEmergencyForm);
+    } catch (error) {
+      console.log(error);
+      alert(getFriendlyError("Unable to upload emergency contacts right now. Please try again."));
+    } finally {
+      setIsEmergencySubmitting(false);
     }
   };
 
@@ -684,16 +1141,27 @@ const UploadNews = () => {
             <h2 className="upload-news-title">Upload News</h2>
             <p className="upload-news-subtitle">Fill the news details below.</p>
           </div>
-          <button
-            type="button"
-            className="btn btn-outline-secondary"
-            onClick={() => {
-              setTranslationError("");
-              setShowTranslateDialog(true);
-            }}
-          >
-            Open Translator
-          </button>
+          <div className="d-flex gap-2">
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => {
+                setActiveUploaderTab("emergency");
+              }}
+            >
+              Emergency Contact
+            </button>
+            <button
+              type="button"
+              className="btn btn-outline-secondary"
+              onClick={() => {
+                setTranslationError("");
+                setShowTranslateDialog(true);
+              }}
+            >
+              Open Translator
+            </button>
+          </div>
         </div>
         <div className="auth-bar">
           <div className="auth-user-wrap">
@@ -704,54 +1172,56 @@ const UploadNews = () => {
             Sign Out
           </button>
         </div>
-        <div className="upload-status-row">
-          <span className={`upload-status ${isCoverUploaded ? "is-done" : "is-pending"}`}>
-            Cover image: {isCoverUploaded ? "Uploaded" : "Pending"}
-          </span>
-          <span className={`upload-status ${inlineImageUrls.length > 0 ? "is-done" : "is-pending"}`}>
-            Inline images: {inlineImageUrls.length} uploaded
-          </span>
-        </div>
-
-        <section className="upload-news-section">
-          <h3 className="upload-news-section-title">1. Upload Cover Image</h3>
-          <label className="form-label" htmlFor="newsImageInput">
-            Select the image
-          </label>
-            <input
-              type="file"
-              className="form-control mb-2"
-              id="newsImageInput"
-              onChange={handleChange}
-              accept="image/*"
-              ref={coverInputRef}
-            />
-            <button
-              type="button"
-              className="btn btn-outline-secondary w-100"
-              onClick={handleUpload}
-              disabled={isCoverProcessing}
-            >
-              Upload Image First
-            </button>
-            {coverProcessingInfo && <p className="upload-hint mt-2">{coverProcessingInfo}</p>}
-            <div
-              className="progress upload-progress"
-              role="progressbar"
-            aria-label="Image upload progress"
-            aria-valuenow={percent}
-            aria-valuemin="0"
-            aria-valuemax="100"
-          >
-            <div className="progress-bar" style={{ width: `${percent}%` }}>
-              {percent}%
+        {activeUploaderTab === "news" && (
+          <>
+            <div className="upload-status-row">
+              <span className={`upload-status ${isCoverUploaded ? "is-done" : "is-pending"}`}>
+                Cover image: {isCoverUploaded ? "Uploaded" : "Pending"}
+              </span>
+              <span className={`upload-status ${inlineImageUrls.length > 0 ? "is-done" : "is-pending"}`}>
+                Inline images: {inlineImageUrls.length} uploaded
+              </span>
             </div>
-          </div>
-        </section>
 
-        <form className="form" onSubmit={PushNewsToFirebase}>
-          <section className="upload-news-section">
-            <h3 className="upload-news-section-title">2. News Details</h3>
+            <section className="upload-news-section">
+              <h3 className="upload-news-section-title">1. Upload Cover Image</h3>
+              <label className="form-label" htmlFor="newsImageInput">
+                Select the image
+              </label>
+              <input
+                type="file"
+                className="form-control mb-2"
+                id="newsImageInput"
+                onChange={handleChange}
+                accept="image/*"
+                ref={coverInputRef}
+              />
+              <button
+                type="button"
+                className="btn btn-outline-secondary w-100"
+                onClick={handleUpload}
+                disabled={isCoverProcessing}
+              >
+                Upload Image First
+              </button>
+              {coverProcessingInfo && <p className="upload-hint mt-2">{coverProcessingInfo}</p>}
+              <div
+                className="progress upload-progress"
+                role="progressbar"
+                aria-label="Image upload progress"
+                aria-valuenow={percent}
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                <div className="progress-bar" style={{ width: `${percent}%` }}>
+                  {percent}%
+                </div>
+              </div>
+            </section>
+
+            <form className="form" onSubmit={PushNewsToFirebase}>
+              <section className="upload-news-section">
+                <h3 className="upload-news-section-title">2. News Details</h3>
             <div className="form-floating mb-3">
               <input
                 onChange={(e) => {
@@ -777,6 +1247,28 @@ const UploadNews = () => {
                 value={body}
               ></textarea>
               <label htmlFor="newsBodyInput">Body, Complete News</label>
+            </div>
+            <div className="d-flex align-items-center gap-2 mb-2">
+              <button
+                type="button"
+                className="btn btn-sm btn-outline-secondary"
+                onClick={handleGenerateTagsClick}
+                disabled={isGeneratingTags}
+              >
+                {isGeneratingTags ? "Generating..." : "Generate Tags"}
+              </button>
+              <span className="upload-hint mb-0">Generates 5-8 tags and logs them in console.</span>
+            </div>
+            <div className="form-floating mb-3">
+              <input
+                type="text"
+                className="form-control"
+                id="newsTagsInput"
+                placeholder='["tag1","tag2"]'
+                value={tagsInputText}
+                onChange={(e) => setTagsInputText(e.target.value)}
+              />
+              <label htmlFor="newsTagsInput">Tags Array (Editable)</label>
             </div>
             <button
               type="button"
@@ -963,12 +1455,162 @@ const UploadNews = () => {
               />
               <label htmlFor="newsLinkInput">News Link: In English</label>
             </div>
-          </section>
+              </section>
 
-          <button type="submit" className="btn btn-primary btn-lg w-100">
-            Submit News
-          </button>
-        </form>
+              <button type="submit" className="btn btn-primary btn-lg w-100">
+                Submit News
+              </button>
+            </form>
+          </>
+        )}
+
+        {activeUploaderTab === "emergency" && (
+          <form className="form" onSubmit={uploadEmergencyContacts}>
+            <section className="upload-news-section">
+              <h3 className="upload-news-section-title">Emergency Contact Form</h3>
+              <p className="upload-hint">Fill service location and mobile numbers, then submit.</p>
+
+              <div className="form-floating mb-3">
+                <input
+                  type="text"
+                  className="form-control"
+                  id="policeStationLocationInput"
+                  placeholder="Police Station Location"
+                  value={emergencyForm.policeStationLocation}
+                  onChange={(event) => handleEmergencyFieldChange("policeStationLocation", event.target.value)}
+                />
+                <label htmlFor="policeStationLocationInput">Police Station Location</label>
+              </div>
+              <div className="form-floating mb-3">
+                <input
+                  type="text"
+                  className="form-control"
+                  id="policeMobileInput"
+                  placeholder="Police Mobile Number"
+                  value={emergencyForm.policeMobileNumber}
+                  onChange={(event) => handleEmergencyFieldChange("policeMobileNumber", event.target.value)}
+                />
+                <label htmlFor="policeMobileInput">Police Mobile Number</label>
+              </div>
+
+              <div className="form-floating mb-3">
+                <input
+                  type="text"
+                  className="form-control"
+                  id="hospitalLocationInput"
+                  placeholder="Hospital Location"
+                  value={emergencyForm.hospitalLocation}
+                  onChange={(event) => handleEmergencyFieldChange("hospitalLocation", event.target.value)}
+                />
+                <label htmlFor="hospitalLocationInput">Hospital Location</label>
+              </div>
+              <div className="form-floating mb-3">
+                <input
+                  type="text"
+                  className="form-control"
+                  id="hospitalMobileInput"
+                  placeholder="Hospital Mobile Number"
+                  value={emergencyForm.hospitalMobileNumber}
+                  onChange={(event) => handleEmergencyFieldChange("hospitalMobileNumber", event.target.value)}
+                />
+                <label htmlFor="hospitalMobileInput">Hospital Mobile Number</label>
+              </div>
+
+              <div className="form-floating mb-3">
+                <input
+                  type="text"
+                  className="form-control"
+                  id="ambulanceLocationInput"
+                  placeholder="Ambulance Location"
+                  value={emergencyForm.ambulanceLocation}
+                  onChange={(event) => handleEmergencyFieldChange("ambulanceLocation", event.target.value)}
+                />
+                <label htmlFor="ambulanceLocationInput">Ambulance Location</label>
+              </div>
+              <div className="form-floating mb-3">
+                <input
+                  type="text"
+                  className="form-control"
+                  id="ambulanceMobileInput"
+                  placeholder="Ambulance Number"
+                  value={emergencyForm.ambulanceMobileNumber}
+                  onChange={(event) => handleEmergencyFieldChange("ambulanceMobileNumber", event.target.value)}
+                />
+                <label htmlFor="ambulanceMobileInput">Ambulance Number</label>
+              </div>
+
+              <div className="form-floating mb-3">
+                <input
+                  type="text"
+                  className="form-control"
+                  id="fireLocationInput"
+                  placeholder="Fire Brigade Location"
+                  value={emergencyForm.fireBrigadeLocation}
+                  onChange={(event) => handleEmergencyFieldChange("fireBrigadeLocation", event.target.value)}
+                />
+                <label htmlFor="fireLocationInput">Fire Brigade Location</label>
+              </div>
+              <div className="form-floating mb-3">
+                <input
+                  type="text"
+                  className="form-control"
+                  id="fireMobileInput"
+                  placeholder="Fire Brigade Number"
+                  value={emergencyForm.fireBrigadeMobileNumber}
+                  onChange={(event) => handleEmergencyFieldChange("fireBrigadeMobileNumber", event.target.value)}
+                />
+                <label htmlFor="fireMobileInput">Fire Brigade Number</label>
+              </div>
+
+              <div className="form-floating mb-3">
+                <input
+                  type="text"
+                  className="form-control"
+                  id="womenHelplineLocationInput"
+                  placeholder="Women Helpline Location"
+                  value={emergencyForm.womenHelplineLocation}
+                  onChange={(event) => handleEmergencyFieldChange("womenHelplineLocation", event.target.value)}
+                />
+                <label htmlFor="womenHelplineLocationInput">Women Helpline Location</label>
+              </div>
+              <div className="form-floating mb-3">
+                <input
+                  type="text"
+                  className="form-control"
+                  id="womenHelplineMobileInput"
+                  placeholder="Women Helpline Number"
+                  value={emergencyForm.womenHelplineMobileNumber}
+                  onChange={(event) => handleEmergencyFieldChange("womenHelplineMobileNumber", event.target.value)}
+                />
+                <label htmlFor="womenHelplineMobileInput">Women Helpline Number</label>
+              </div>
+
+              <div className="form-floating mb-3">
+                <textarea
+                  className="form-control upload-textarea"
+                  id="emergencyNotesInput"
+                  placeholder="Notes"
+                  value={emergencyForm.notes}
+                  onChange={(event) => handleEmergencyFieldChange("notes", event.target.value)}
+                ></textarea>
+                <label htmlFor="emergencyNotesInput">Notes</label>
+              </div>
+            </section>
+
+            <div className="d-flex gap-2">
+              <button
+                type="button"
+                className="btn btn-outline-secondary w-100"
+                onClick={() => setActiveUploaderTab("news")}
+              >
+                Back To News Form
+              </button>
+              <button type="submit" className="btn btn-primary btn-lg w-100" disabled={isEmergencySubmitting}>
+                {isEmergencySubmitting ? "Submitting..." : "Submit Emergency Contacts"}
+              </button>
+            </div>
+          </form>
+        )}
       </div>
       {showTranslateDialog && (
         <div
